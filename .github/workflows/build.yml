@@ -11,6 +11,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Add swap space (GeckoView is memory hungry)
+        run: |
+          sudo swapoff -a || true
+          sudo fallocate -l 8G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
+
       - name: Locate project (root, subfolder, or zip)
         run: |
           S=$(find . -name settings.gradle -not -path "./.git/*" | head -n1)
@@ -38,7 +47,19 @@ jobs:
 
       - name: Build debug APK
         working-directory: ${{ env.PROJECT_DIR }}
-        run: gradle assembleDebug --no-daemon
+        run: |
+          set +e
+          gradle assembleDebug --no-daemon --console=plain --stacktrace 2>&1 | tee build.log
+          CODE=${PIPESTATUS[0]}
+          echo "Gradle exit code: $CODE"
+          if [ "$CODE" != "0" ]; then
+            echo "=== LAST 60 LINES ==="
+            tail -n 60 build.log
+            echo "=== OUT-OF-MEMORY CHECK ==="
+            sudo dmesg | grep -i -E "killed process|out of memory" | tail -5
+            free -h
+          fi
+          exit $CODE
 
       - uses: actions/upload-artifact@v4
         with:
