@@ -49,15 +49,15 @@ jobs:
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           set +e
-          gradle assembleDebug --no-daemon --console=plain --stacktrace 2>&1 | tee build.log
+          gradle assembleDebug --no-daemon --console=plain 2>&1 | tee build.log
           CODE=${PIPESTATUS[0]}
-          echo "Gradle exit code: $CODE"
           if [ "$CODE" != "0" ]; then
-            echo "=== LAST 60 LINES ==="
-            tail -n 60 build.log
-            echo "=== OUT-OF-MEMORY CHECK ==="
-            sudo dmesg | grep -i -E "killed process|out of memory" | tail -5
-            free -h
+            echo "################ FAILED TASK ################"
+            grep -n "FAILED" build.log | head -5
+            echo "################ WHAT WENT WRONG ################"
+            grep -n -A 12 "What went wrong" build.log | head -40
+            echo "################ JAVA ERRORS ################"
+            grep -n "error:" build.log | head -30
           fi
           exit $CODE
 
