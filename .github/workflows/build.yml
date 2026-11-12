@@ -2,7 +2,6 @@ name: Build APK
 
 on:
   push:
-  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -10,26 +9,39 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Locate project (root, subfolder, or zip)
+        run: |
+          S=$(find . -name settings.gradle -not -path "./.git/*" | head -n1)
+          if [ -z "$S" ]; then
+            Z=$(find . -name "*.zip" -not -path "./.git/*" | head -n1)
+            if [ -z "$Z" ]; then
+              echo "No settings.gradle or .zip found in repo"; ls -R; exit 1
+            fi
+            echo "Unzipping $Z"
+            mkdir -p _proj
+            unzip -q -o "$Z" -d _proj
+            S=$(find _proj -name settings.gradle | head -n1)
+          fi
+          echo "Found: $S"
+          echo "PROJECT_DIR=$(dirname "$S")" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Set up Gradle 8.5
-        uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.5
 
       - name: Build debug APK
+        working-directory: ${{ env.PROJECT_DIR }}
         run: gradle assembleDebug --no-daemon
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: TV-Browser-APK
-          path: app/build/outputs/apk/debug/*.apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
